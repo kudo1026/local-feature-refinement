@@ -22,7 +22,9 @@ from feature_matchers import mnn_similarity_matcher, mnn_ratio_matcher
 
 from model import PANet
 
-from refinement import refine_matches_coarse_to_fine as refine_matches
+# from refinement import refine_matches_coarse_to_fine as refine_matches
+
+from featuremetric_refinement import extract_patches_and_estimate_displacements as refine_matches
 
 max_size_dict = {
     'sift': (1600, 3200),
@@ -161,36 +163,44 @@ if __name__ == '__main__':
 
             # Keypoint refinement.
             if args.skip_refinement:
-                displacements_ab = np.zeros((matches.shape[0], 2))
-                displacements_ba = np.zeros((matches.shape[0], 2))
+                displacements_b = np.zeros((matches.shape[0], 2))
+                displacements_a = np.zeros((matches.shape[0], 2))
             else:
-                displacements_ab, displacements_ba = refine_matches(
-                    image_a, keypoints_a,
-                    image_b, keypoints_b,
+                # displacements_b, displacements_a = refine_matches(
+                #     image_a, keypoints_a,
+                #     image_b, keypoints_b,
+                #     matches,
+                #     net, device, args.batch_size, symmetric=True, grid=False
+                # )
+                placements_b, displacements_a = refine_matches(
+                    image_a, keypoints_a, descriptors_a,
+                    image_b, keypoints_b, descriptors_b,
                     matches,
-                    net, device, args.batch_size, symmetric=True, grid=False
+                    device
                 )
 
-            # print('grid displacement ba shape: ', grid_displacements_ba.shape)
-            # print('grid displacement ab shape: ', grid_displacements_ab.shape)
+            print('displacement b shape: ', displacements_b.shape)
+            print('displacement a shape: ', displacements_a.shape)
 
             # refine keypoints for image a
-            dx_a = displacements_ba[:, 1]
-            dy_a = displacements_ba[:, 0]
+            dx_a = displacements_a[:, 1]
+            dy_a = displacements_a[:, 0]
             keypoints_a[matches[:, 0], 0] += dx_a
             keypoints_a[matches[:, 0], 1] += dy_a
 
             # refine keypoints for image b
-            dx_b = displacements_ab[:, 1]
-            dy_b = displacements_ab[:, 0]
+            dx_b = displacements_b[:, 1]
+            dy_b = displacements_b[:, 0]
             keypoints_b[matches[:, 1], 0] += dx_b
             keypoints_b[matches[:, 1], 1] += dy_b
             
             # get ground truth homography
             homography = np.loadtxt(os.path.join(paths.dataset_path, seq_name, "H_1_" + str(im_idx)))
             
-            # print('matches shape: ',matches.shape)
-            # print('keypoint shape: ', keypoints_a.shape)
+            # print('matches shape: ',matches.shape) # shape: num_match x 2
+            # print('keypoint shape: ', keypoints_a.shape) # shape: num_kpts x 2
+            # print('descriptors shape: ',descriptors_a.shape) # shape: num_kpt x 128
+
             pos_a = keypoints_a[matches[:, 0], :] 
             pos_a_h = np.concatenate([pos_a, np.ones([matches.shape[0], 1])], axis=1)
             pos_b_proj_h = np.transpose(np.dot(homography, np.transpose(pos_a_h)))
